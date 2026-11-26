@@ -19,6 +19,8 @@ Expected final output: `SMOKE PASS`. This is two optimizer updates and an inner-
 
 ## Subsequent experiments
 
+For learning-curve diagnosis without another outer-test evaluation, add `--validation-only`. For example, use Task 2, `--folds 0 --epochs 12 --validation-only` to inspect whether a longer training budget improves inner-validation performance. This writes `validation_fold_0.json`, including the best inner-validation epoch, and does not create test predictions or a CV summary. The diagnostic does not establish generalization performance. Select training changes using inner validation, then evaluate the selected procedure separately; extensive reuse of the same inner validation can also overfit it.
+
 Only after smoke validation, remove `--smoke` to train one complete fold. Use `--folds all` for ten-fold evaluation. Use `--model microsoft/deberta-v3-base` for the second encoder. Do not assume a partial-fold score establishes 90% performance. Defaults: 4 epochs, learning rate 2e-5, batch size 4, gradient accumulation 4, maximum length 128, FP32. These are initial settings, not optimized hyperparameters. Optional FP16 can reduce compute costs, but use FP32 if training becomes non-finite.
 
 Tasks 1/2/3 use softmax classification. Task 2 contains US/SE/O/PE (249 rows); Task 3 contains ten NFR subclasses excluding PO (369 rows), consistent with the existing task definition. Tasks 4/5 start with a shared encoder and independent sigmoid outputs, using binary cross entropy at threshold 0.5. They do not yet include the previous LR chain, label-specific thresholds, or cost-sensitive loss.

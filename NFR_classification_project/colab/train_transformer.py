@@ -100,6 +100,8 @@ def main():
     parser.add_argument("--weight-decay", type=float, default=0.01)
     parser.add_argument("--precision", choices=["fp32", "fp16"], default="fp32")
     parser.add_argument("--smoke", action="store_true", help="Two optimizer steps, inner validation only")
+    parser.add_argument("--validation-only", action="store_true",
+                        help="Train and select epochs on inner validation; never evaluate outer test")
     parser.add_argument("--audit-only", action="store_true")
     args = parser.parse_args()
     for name in ("epochs", "batch_size", "accumulation", "max_length"):
@@ -179,7 +181,9 @@ def main():
     checkpoint_path = run_dir / "resume.pt"  # One rolling checkpoint for all folds.
     for fold in selected:
         split = splits[fold]
-        result_path = run_dir / (f"smoke_fold_{fold}.json" if args.smoke else f"fold_{fold}.json")
+        result_name = (f"smoke_fold_{fold}.json" if args.smoke else
+                       f"validation_fold_{fold}.json" if args.validation_only else f"fold_{fold}.json")
+        result_path = run_dir / result_name
         if result_path.exists():
             print(f"Fold {fold}: already complete, skipping", flush=True)
             continue
@@ -253,6 +257,7 @@ def main():
             val_metrics, _, _ = evaluate(model, split["validation"])
             score = selection_score(val_metrics)
             entry = {"epoch": epoch + 1, "train_loss": train_loss / (step + 1),
+                     "optimizer_updates": updates,
                      "inner_validation": val_metrics}
             history.append(entry)
             print(f"Fold {fold}, epoch {epoch+1}: loss={entry['train_loss']:.4f}; inner F1={score:.4f}", flush=True)
@@ -274,6 +279,18 @@ def main():
                        "elapsed_seconds": time.time() - started,
                        "peak_gpu_gb": torch.cuda.max_memory_allocated() / 1024**3})
             print("SMOKE PASS: GPU training and inner validation worked. Outer test fold was not evaluated.", flush=True)
+        elif args.validation_only:
+            diagnostic = {"status": "inner_validation_only_not_a_test_score", "fold": fold,
+                          "best_inner_f1": best_score,
+                          "best_epoch": max(history, key=lambda h: selection_score(h["inner_validation"]))["epoch"],
+                          "train_samples": len(split["train"]),
+                          "validation_samples": len(split["validation"]),
+                          "history": history,
+                          "elapsed_seconds": elapsed_before + time.time() - started,
+                          "peak_gpu_gb": torch.cuda.max_memory_allocated() / 1024**3}
+            write_json(result_path, diagnostic)
+            print(json.dumps({k: v for k, v in diagnostic.items() if k != "history"}, indent=2), flush=True)
+            print("VALIDATION ONLY COMPLETE: outer test fold was not evaluated.", flush=True)
         else:
             model.load_state_dict(best_state)
             test_metrics, pred, probs = evaluate(model, split["test"])
