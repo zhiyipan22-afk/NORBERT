@@ -1,0 +1,32 @@
+# Credentials and local environment
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+.cache/
+.ipynb_checkpoints/
+__pycache__/
+*.py[cod]
+
+# Downloaded weights and training artifacts (download separately)
+*.pkl
+*.pt
+*.pth
+*.bin
+*.safetensors
+checkpoint-*/
+wandb/
+runs/
+
+# Archives, paper copies, and generated office documents
+*.zip
+*.pdf
+*.docx
+*.pptx
+
+# Generated presentation assets and diagnostic output
+NFR_classification_project/ppt_edit/
+NFR_classification_project/ppt_slides/
+NFR_classification_project/src/*.txt
+*.log
