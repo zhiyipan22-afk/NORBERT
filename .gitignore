@@ -30,3 +30,4 @@ NFR_classification_project/ppt_edit/
 NFR_classification_project/ppt_slides/
 NFR_classification_project/src/*.txt
 *.log
+NFR_classification_project/colab/local_check/

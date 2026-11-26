@@ -17,7 +17,11 @@ This repository contains a local reproduction project for **NoRBERT: Transfer Le
 - `src/advanced_improvement_v2.py`: Task 1 feature fusion and ten-class NFR experiments (the latter is named Task 2/3 in the script).
 - `src/task4_task5_improvement.py`: Task 4/5 cost-sensitive and classifier-chain experiments.
 
-These paths are relative to `NFR_classification_project/`. This upload preserves the existing experiments; it does not include a new DeBERTa experiment or a tested Colab setup. Scripts currently contain absolute Windows data paths, which must be adapted before running on Colab or another machine. Existing reports use different evaluation settings; inspect the script and result metadata before comparing scores.
+These paths are relative to `NFR_classification_project/`. Legacy scripts contain absolute Windows data paths. Existing reports use different evaluation settings; inspect the script and result metadata before comparing scores.
+
+## New Colab runner
+
+Open [the preparation notebook in Colab](https://colab.research.google.com/github/zhiyipan22-afk/NORBERT/blob/main/NFR_classification_project/colab/NORBERT_Colab.ipynb). See [the Colab instructions](NFR_classification_project/colab/README.md) for separate Task 1–5 definitions, BERT/DeBERTa training, Drive checkpoints, and evaluation limitations. Offline protocol checks pass locally; GPU execution still requires the initial Colab smoke check. No new model performance results have been obtained yet.
 
 ## Large files
 
