@@ -6,11 +6,23 @@ import unittest
 
 import numpy as np
 
-from task_data import load_task, make_splits
+from task_data import load_task, make_splits, training_class_weights
 from train_transformer import metrics, summarize
 
 
 class ProtocolTests(unittest.TestCase):
+    def test_class_weights_help_rare_classes_without_changing_sample_scale(self):
+        labels = np.array([0] * 9 + [1])
+        mild = training_class_weights(labels, 2, "sqrt")
+        strong = training_class_weights(labels, 2, "balanced")
+        self.assertAlmostEqual(float(mild[1] / mild[0]), 3., places=5)
+        self.assertAlmostEqual(float(strong[1] / strong[0]), 9., places=5)
+        self.assertAlmostEqual(float(mild[labels].mean()), 1., places=5)
+        self.assertAlmostEqual(float(strong[labels].mean()), 1., places=5)
+        np.testing.assert_array_equal(training_class_weights(labels, 2), [1., 1.])
+        with self.assertRaises(ValueError):
+            training_class_weights(np.zeros(10, dtype=int), 2, "sqrt")
+
     def test_task_definitions_and_split_isolation(self):
         for task, size in enumerate([625, 249, 369, 612, 309], start=1):
             with self.subTest(task=task):

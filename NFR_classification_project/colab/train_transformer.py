@@ -12,7 +12,7 @@ import time
 import numpy as np
 from sklearn.metrics import accuracy_score, classification_report, f1_score
 
-from task_data import load_task, make_splits
+from task_data import load_task, make_splits, training_class_weights
 
 
 def write_json(path, value):
@@ -98,12 +98,16 @@ def main():
     parser.add_argument("--max-length", type=int, default=128)
     parser.add_argument("--lr", type=float, default=2e-5)
     parser.add_argument("--weight-decay", type=float, default=0.01)
+    parser.add_argument("--class-weight", choices=["none", "sqrt", "balanced"], default="none",
+                        help="Training-fold-only class weighting for Tasks 1-3")
     parser.add_argument("--precision", choices=["fp32", "fp16"], default="fp32")
     parser.add_argument("--smoke", action="store_true", help="Two optimizer steps, inner validation only")
     parser.add_argument("--validation-only", action="store_true",
                         help="Train and select epochs on inner validation; never evaluate outer test")
     parser.add_argument("--audit-only", action="store_true")
     args = parser.parse_args()
+    if args.task >= 4 and args.class_weight != "none":
+        parser.error("--class-weight currently supports single-label Tasks 1-3 only")
     for name in ("epochs", "batch_size", "accumulation", "max_length"):
         if getattr(args, name) < 1:
             parser.error(f"{name} must be positive")
@@ -201,6 +205,14 @@ def main():
         environment["model_commit"] = getattr(model.config, "_commit_hash", None)
         write_json(run_dir / "environment.json", environment)
         train_loader = loader(split["train"], shuffle=True)
+        class_weights = None
+        weight_record = None
+        if args.class_weight != "none":
+            weight_values = training_class_weights(
+                data["labels"][split["train"]], len(data["names"]), args.class_weight)
+            class_weights = torch.tensor(weight_values, dtype=torch.float32, device="cuda")
+            weight_record = dict(zip(data["names"], weight_values.tolist()))
+            print(f"Fold {fold}: training-only class weights = {weight_record}", flush=True)
         epochs = 1 if args.smoke else args.epochs
         steps_per_epoch = math.ceil(len(train_loader) / args.accumulation)
         total_steps = 2 if args.smoke else steps_per_epoch * epochs
@@ -237,7 +249,11 @@ def main():
                 group_start = (step // args.accumulation) * args.accumulation
                 group_size = min(args.accumulation, len(train_loader) - group_start)
                 with torch.autocast("cuda", dtype=torch.float16, enabled=args.precision == "fp16"):
-                    loss = model(**batch).loss
+                    outputs = model(**batch)
+                    loss = (outputs.loss if class_weights is None else
+                            torch.nn.functional.cross_entropy(
+                                outputs.logits.float(), batch["labels"], weight=class_weights,
+                                reduction="none").mean())
                 if not torch.isfinite(loss):
                     raise RuntimeError("Non-finite loss. Retry with --precision fp32.")
                 train_loss += loss.item()
@@ -285,6 +301,7 @@ def main():
                           "best_epoch": max(history, key=lambda h: selection_score(h["inner_validation"]))["epoch"],
                           "train_samples": len(split["train"]),
                           "validation_samples": len(split["validation"]),
+                          "class_weights": weight_record,
                           "history": history,
                           "elapsed_seconds": elapsed_before + time.time() - started,
                           "peak_gpu_gb": torch.cuda.max_memory_allocated() / 1024**3}
@@ -295,6 +312,7 @@ def main():
             model.load_state_dict(best_state)
             test_metrics, pred, probs = evaluate(model, split["test"])
             write_json(result_path, {"fold": fold, "metrics": test_metrics, "history": history,
+                       "class_weights": weight_record,
                        "indices": split["test"], "predictions": pred.tolist(),
                        "probabilities": probs.tolist(), "threshold": 0.5 if is_multi else None,
                        "elapsed_seconds": elapsed_before + time.time() - started,

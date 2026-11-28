@@ -50,6 +50,24 @@ def load_task(task):
     }
 
 
+def training_class_weights(labels, num_classes, mode="none"):
+    """Return sample-normalized inverse-frequency weights from training labels only."""
+    if mode not in ("none", "sqrt", "balanced"):
+        raise ValueError("Unknown class-weight mode")
+    labels = np.asarray(labels, dtype=int)
+    if labels.ndim != 1 or not len(labels) or (labels < 0).any() or (labels >= num_classes).any():
+        raise ValueError("Expected nonempty one-dimensional class indices")
+    counts = np.bincount(labels, minlength=num_classes)
+    if mode == "none":
+        return np.ones(num_classes, dtype=np.float32)
+    if (counts == 0).any():
+        raise ValueError("Cannot weight a class with no training examples")
+    power = 0.5 if mode == "sqrt" else 1.0
+    weights = (len(labels) / (num_classes * counts)) ** power
+    weights /= np.dot(counts, weights) / len(labels)
+    return weights.astype(np.float32)
+
+
 def make_splits(data, n_splits=10, seed=42):
     """Match legacy outer folds; select epochs only on an inner holdout."""
     y = data["labels"]
